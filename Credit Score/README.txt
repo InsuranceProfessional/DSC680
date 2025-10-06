@@ -1,0 +1,1 @@
+Credit Score jupyter file should be ran first which will use train to output train_clean, then run machine learning models via random forest model and use test to cross validate that model.

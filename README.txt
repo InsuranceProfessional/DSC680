@@ -1,0 +1,1 @@
+This is Champlin Smith's Repository showcasing different Data Science projects. Each project has one folder in the root directory with all required files in their respective folders.
