@@ -1,0 +1,175 @@
+---
+title: "ChamplinSMITHDSC640Week56"
+author: "Champlin Smith"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(janitor)
+```
+
+```{r load-data}
+# Ingest data from four different files into four data frames
+policedata <- read_csv("C:\Users\champ\OneDrive\Documents\MS Data Science\DSC680 Applied Data Science\DSC680\Car Theft\carTheftsMap.csv")
+df2 <- read_csv("C:\Users\champ\OneDrive\Documents\MS Data Science\DSC680 Applied Data Science\DSC680\Car Theft\KiaHyundaiMilwaukeeData.csv")
+df3 <- read_csv("C:\Users\champ\OneDrive\Documents\MS Data Science\DSC680 Applied Data Science\DSC680\Car Theft\kiaHyundaiThefts.csv")
+
+# View the structure of the data
+str(policedata)
+str(df2)
+str(df3)
+
+# Optional: Print the first few rows of each
+head(policedata)
+head(df2)
+head(df3)
+```
+
+
+```{r}
+cityyearrdataa <- bind_rows(df2, df3)
+
+# View the structure and first few rows of the combined data frame
+str(cityyearrdataa)
+head(cityyearrdataa)
+```
+
+```{r}
+library(ggplot2)
+library(lubridate)
+
+# Create a proper date column from month and year
+cityyearrdataa <- cityyearrdataa %>%
+  mutate(
+    month_num = match(tolower(month), tolower(month.abb)),  # match abbreviated month names
+    year_num = as.integer(year),
+    date = make_date(year = year_num, month = month_num, day = 1)
+  )
+cityyearrdataa_clean <- cityyearrdataa %>%
+  filter(!is.na(date), !is.na(percentKiaHyundai), is.finite(percentKiaHyundai))
+
+# Now plot with ggplot2
+ggplot(cityyearrdataa_clean, aes(x = date, y = percentKiaHyundai, color = state)) +
+  geom_line() +
+  labs(
+    title = "Percent Kia/Hyundai Over Time by State",
+    x = "Date",
+    y = "Percent Kia/Hyundai",
+    color = "State"
+  ) +
+  theme_minimal()
+```
+
+# Checking to make sure data is accurate since GA is an outlier.
+```{r}
+library(knitr)
+ga_data <- cityyearrdataa_clean %>% filter(state == "GA")
+
+# Show as a nice table in your report
+kable(ga_data, caption = "Data for State of Georgia (GA)")
+```
+
+```{r}
+cityyearrdataa <- cityyearrdataa %>%
+  mutate(total = countKiaHyundaiThefts + countOtherThefts)
+```
+
+
+```{r}
+# Ensure month is converted correctly
+cityyearrdataa <- cityyearrdataa %>%
+  mutate(
+    month_num = match(tolower(month), tolower(month.abb)),
+    year_num = as.integer(year),
+    date = make_date(year = year_num, month = month_num, day = 1)
+  )
+
+# Filter out rows with invalid data
+cityyearrdataa_clean <- cityyearrdataa %>%
+  filter(!is.na(date), !is.na(percentKiaHyundai), is.finite(percentKiaHyundai))
+
+# Plot vertical stacked bar chart
+ggplot(cityyearrdataa_clean, aes(x = date, y = percentKiaHyundai, fill = state)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Percent Kia/Hyundai Over Time by State",
+    x = "Date",
+    y = "Percent Kia/Hyundai",
+    fill = "State"
+  ) +
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+head(cityyearrdataa_clean)
+```
+
+
+
+```{r}
+library(treemapify)
+# Filter for 2022
+data_dec_2022 <- cityyearrdataa_clean %>%
+  filter(year_num == 2022, month_num == 12)
+
+# Aggregate percentKiaHyundai by state (mean or sum)
+state_summary <- data_dec_2022 %>%
+  group_by(state) %>%
+  summarize(
+    avg_percent = mean(percentKiaHyundai, na.rm = TRUE),
+    total = sum(total)
+  )
+
+# Treemap plot (size by total rows, color by avg_percent)
+ggplot(state_summary, aes(
+  area = total,
+  fill = avg_percent,
+  label = state
+)) +
+  geom_treemap() +
+  geom_treemap_text(colour = "white", place = "centre", size = 12) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", name = "Avg % Kia/Hyundai") +
+  labs(title = "Treemap of Kia/Hyundai Theft Percent by State in 2022") +
+  theme(legend.position = "right")
+```
+# Illinois has the most total crime, but Ohio has the highest concentration of Kia and Hyundai crimes in Dec of 2022.
+
+```{r}
+ggplot(cityyearrdataa_clean, aes(x = date, y = percentKiaHyundai, fill = state)) +
+  geom_area(position = "stack", alpha = 0.8) +
+  labs(
+    title = "Percent Kia/Hyundai Over Time by State (Stacked Area Chart)",
+    x = "Date",
+    y = "Percent Kia/Hyundai",
+    fill = "State"
+  ) +
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+state_summary <- state_summary %>%
+  mutate(fraction = total / sum(total),
+         ymax = cumsum(fraction),
+         ymin = c(0, head(ymax, n = -1)),
+         label_pos = (ymax + ymin) / 2,
+         label = paste0(state, "\n", scales::percent(fraction)))
+
+# Donut chart with a hole in the middle
+ggplot(state_summary, aes(ymax = ymax, ymin = ymin, xmax = 4, xmin = 3, fill = avg_percent)) +
+  geom_rect(color = "white") +
+  coord_polar(theta = "y") +
+  xlim(c(0, 4)) +  # Controls the thickness of the donut
+  theme_void() +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", name = "Avg % Kia/Hyundai") +
+  geom_text(aes(x = 3.5, y = label_pos, label = label), color = "white", size = 4) +
+  labs(title = "Donut Chart of Kia/Hyundai Theft Totals by State - Dec 2022")
+```
+
